@@ -67,12 +67,14 @@ public:
   ColorOSim(ros::NodeHandle* nh);
   virtual ~ColorOSim();
 
+  bool init();
   void setColor(color::rgba color);
-  void setColorMulti(std::vector<color::rgba> &colors){};
+  void setColorMulti(std::vector<color::rgba> &colors);
 
 private:
   ros::NodeHandle* p_nh;
   ros::Publisher _pubSimulation;
+  ros::Publisher _pubSimulationMulti;
 };
 
 #endif
