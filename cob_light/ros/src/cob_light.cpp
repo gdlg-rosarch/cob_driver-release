@@ -113,6 +113,10 @@ public:
   LightControl() :
     _invertMask(0), _topic_priority(0)
   {
+  }
+  bool init()
+  {
+    bool ret = true;
     bool invert_output;
     XmlRpc::XmlRpcValue param_list;
     std::string startup_mode;
@@ -120,10 +124,10 @@ public:
     p_modeExecutor = NULL;
     //diagnostics
     _pubDiagnostic = _nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 1);
+    _diagnostics_timer = _nh.createTimer(ros::Duration(1.0), &LightControl::publish_diagnostics_cb, this);
 
     diagnostic_msgs::DiagnosticStatus status;
-    status.name = "light";
-
+    status.name = ros::this_node::getName();
 
     //Get Parameter from Parameter Server
     _nh = ros::NodeHandle("~");
@@ -147,6 +151,10 @@ public:
     if(!_nh.hasParam("pubmarker"))
       ROS_WARN("Parameter 'pubmarker' is missing. Using default Value: true");
     _nh.param<bool>("pubmarker",_bPubMarker,true);
+    
+    if(!_nh.hasParam("marker_frame"))
+      ROS_WARN("Parameter 'marker_frame' is missing. Using default Value: /base_link");
+    _nh.param<std::string>("marker_frame",_sMarkerFrame,"base_link");
 
     if(!_nh.hasParam("sim_enabled"))
       ROS_WARN("Parameter 'sim_enabled' is missing. Using default Value: false");
@@ -181,13 +189,13 @@ public:
     _sub = _nh.subscribe("command", 1, &LightControl::topicCallback, this);
 
     //Subscribe to LightController Command Topic
-    _sub_mode = _nh.subscribe("command_mode", 1, &LightControl::topicCallbackMode, this);
+    _sub_mode = _nh.subscribe("light", 1, &LightControl::topicCallbackMode, this);
 
     //Advertise light mode Service
-    _srvServer = _nh.advertiseService("mode", &LightControl::serviceCallback, this);
+    _srvServer = _nh.advertiseService("set_light", &LightControl::serviceCallback, this);
 
     //Start light mode Action Server
-    _as = new ActionServer(_nh, "set_lightmode", boost::bind(&LightControl::actionCallback, this, _1), false);
+    _as = new ActionServer(_nh, "set_light", boost::bind(&LightControl::actionCallback, this, _1), false);
     _as->start();
 
     //Advertise visualization marker topic
@@ -200,23 +208,37 @@ public:
       if(_serialIO.openPort(_deviceString, _baudrate) != -1)
       {
         ROS_INFO("Serial connection on %s succeeded.", _deviceString.c_str());
+        status.level = 0;
+        status.message = "light controller running";
+
         if(_deviceDriver == "cob_ledboard")
           p_colorO = new ColorO(&_serialIO);
         else if(_deviceDriver == "ms-35")
           p_colorO = new MS35(&_serialIO);
         else if(_deviceDriver == "stageprofi")
           p_colorO = new StageProfi(&_serialIO, _num_leds);
-        if(p_colorO)
-          p_colorO->setMask(_invertMask);
-
-        status.level = 0;
-        status.message = "light controller running";
+        else
+        {
+          ROS_ERROR_STREAM("Unsupported devicedriver ["<<_deviceDriver<<"], falling back to sim mode");
+          p_colorO = new ColorOSim(&_nh);
+          status.level = 2;
+          status.message = "Unsupported devicedriver. Running in simulation mode";
+        }
+        p_colorO->setMask(_invertMask);
+        if(!p_colorO->init())
+        {
+          status.level = 3;
+          status.message = "Initializing connection to driver failed";
+          ROS_ERROR("Initializing connection to driver failed. Exiting");
+          ret = false;
+        }
       }
       else
       {
         ROS_WARN("Serial connection on %s failed.", _deviceString.c_str());
         ROS_WARN("Simulation mode enabled");
         p_colorO = new ColorOSim(&_nh);
+        p_colorO->setNumLeds(_num_leds);
 
         status.level = 2;
         status.message = "Serial connection failed. Running in simulation mode";
@@ -226,14 +248,15 @@ public:
     {
       ROS_INFO("Simulation mode enabled");
       p_colorO = new ColorOSim(&_nh);
+      p_colorO->setNumLeds(_num_leds);
       status.level = 0;
       status.message = "light controller running in simulation";
     }
 
     _diagnostics.status.push_back(status);
-    _diagnostics.header.stamp = ros::Time::now();
-    _pubDiagnostic.publish(_diagnostics);
-    _diagnostics.status.resize(0);
+
+    if(!ret)
+      return false;
 
     if(_bPubMarker)
       p_colorO->signalColorSet()->connect(boost::bind(&LightControl::markerCallback, this, _1));
@@ -247,6 +270,8 @@ public:
     }
     else
       p_modeExecutor->execute(mode);
+
+    return true;
   }
 
   ~LightControl()
@@ -364,19 +389,25 @@ public:
       _as->setSucceeded(result, "Mode switched");
     }
   }
+  
+  void publish_diagnostics_cb(const ros::TimerEvent&)
+  {
+    _diagnostics.header.stamp = ros::Time::now();
+    _pubDiagnostic.publish(_diagnostics);
+  }
 
   void markerCallback(color::rgba color)
   {
     visualization_msgs::Marker marker;
-    marker.header.frame_id = "/base_link";
+    marker.header.frame_id = _sMarkerFrame;
     marker.header.stamp = ros::Time();
     marker.ns = "color";
     marker.id = 0;
     marker.type = visualization_msgs::Marker::SPHERE;
     marker.action = visualization_msgs::Marker::ADD;
-    marker.pose.position.x = 0;
-    marker.pose.position.y = 0;
-    marker.pose.position.z = 1.5;
+    marker.pose.position.x = 0.5;
+    marker.pose.position.y = 0.0;
+    marker.pose.position.z = 0.0;
     marker.pose.orientation.x = 0.0;
     marker.pose.orientation.y = 0.0;
     marker.pose.orientation.z = 0.0;
@@ -397,6 +428,7 @@ private:
   int _baudrate;
   int _invertMask;
   bool _bPubMarker;
+  std::string _sMarkerFrame;
   bool _bSimEnabled;
   int _num_leds;
 
@@ -410,6 +442,7 @@ private:
 
   diagnostic_msgs::DiagnosticArray _diagnostics;
   ros::Publisher _pubDiagnostic;
+  ros::Timer _diagnostics_timer;
 
   typedef actionlib::SimpleActionServer<cob_light::SetLightModeAction> ActionServer;
   ActionServer *_as;
@@ -433,18 +466,20 @@ int main(int argc, char** argv)
 
   // create LightControl instance
   LightControl *lightControl = new LightControl();
-
-  ros::AsyncSpinner spinner(1);
-  spinner.start();
-
-  while (!gShutdownRequest)
+  if(lightControl->init())
   {
-    ros::Duration(0.05).sleep();
+    ros::AsyncSpinner spinner(1);
+    spinner.start();
+
+    while (!gShutdownRequest)
+    {
+      ros::Duration(0.05).sleep();
+    }
+
+    delete lightControl;
+
+    ros::shutdown();
   }
-
-  delete lightControl;
-
-  ros::shutdown();
 
   return 0;
 }
