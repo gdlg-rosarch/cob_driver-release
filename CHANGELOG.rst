@@ -2,6 +2,9 @@
 Changelog for package cob_base_drive_chain
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.5 (2015-08-31)
+------------------
+
 0.6.4 (2015-08-25)
 ------------------
 * install tags for libraries
