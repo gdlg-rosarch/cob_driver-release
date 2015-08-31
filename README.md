@@ -1,3 +1,40 @@
+## cob_driver (indigo) - 0.6.5-0
+
+The packages in the `cob_driver` repository were released into the `indigo` distro by running `/usr/bin/bloom-release cob_driver --rosdistro indigo --track indigo` on `Mon, 31 Aug 2015 08:18:37 -0000`
+
+These packages were released:
+- `cob_base_drive_chain`
+- `cob_camera_sensors`
+- `cob_canopen_motor`
+- `cob_driver`
+- `cob_generic_can`
+- `cob_head_axis`
+- `cob_light`
+- `cob_mimic`
+- `cob_phidgets`
+- `cob_relayboard`
+- `cob_sick_lms1xx`
+- `cob_sick_s300`
+- `cob_sound`
+- `cob_undercarriage_ctrl`
+- `cob_utilities`
+- `cob_voltage_control`
+
+Version of package(s) in repository `cob_driver`:
+- upstream repository: https://github.com/ipa320/cob_driver.git
+- release repository: https://github.com/ipa320/cob_driver-release.git
+- rosdistro version: `0.6.4-0`
+- old version: `0.6.4-0`
+- new version: `0.6.5-0`
+
+Versions of tools used:
+- bloom version: `0.5.20`
+- catkin_pkg version: `0.2.10`
+- rosdep version: `0.11.2`
+- rosdistro version: `0.4.2`
+- vcstools version: `0.1.36`
+
+
 ## cob_driver (indigo) - 0.6.4-0
 
 The packages in the `cob_driver` repository were released into the `indigo` distro by running `/usr/bin/bloom-release cob_driver --track indigo --rosdistro indigo` on `Tue, 25 Aug 2015 20:39:51 -0000`
