@@ -2,6 +2,9 @@
 Changelog for package cob_phidgets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.5 (2015-08-31)
+------------------
+
 0.6.4 (2015-08-25)
 ------------------
 * do not install headers in executable-only packages
