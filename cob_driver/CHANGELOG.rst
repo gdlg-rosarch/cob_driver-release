@@ -2,6 +2,13 @@
 Changelog for package cob_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.6 (2016-04-01)
+------------------
+* add to meta-package
+* added cob_elmo_homing to meta package
+* added scan unifier to metapackage
+* Contributors: Benjamin Maidel, Florian Weisshardt, ipa-fxm
+
 0.6.5 (2015-08-31)
 ------------------
 
