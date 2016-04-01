@@ -65,8 +65,6 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float64.h>
 #include <cob_msgs/EmergencyStopState.h>
-#include <cob_msgs/PowerBoardState.h>
-
 
 // ROS service includes
 //--
@@ -82,10 +80,10 @@ class NodeClass
 public:
   // create a handle for this node, initialize node
   ros::NodeHandle n;
+  ros::NodeHandle n_priv;
 
   // topics to publish
   ros::Publisher topicPub_isEmergencyStop;
-  ros::Publisher topicPub_PowerBoardState;
   ros::Publisher topicPub_Voltage;
   // topics to subscribe, callback is called for new messages arriving
   // --
@@ -93,11 +91,11 @@ public:
   // Constructor
   NodeClass()
   {
-    n = ros::NodeHandle("~");
+    n = ros::NodeHandle();
+    n_priv = ros::NodeHandle("~");
 
-    topicPub_isEmergencyStop = n.advertise<cob_msgs::EmergencyStopState>("/emergency_stop_state", 1);
-    topicPub_PowerBoardState = n.advertise<cob_msgs::PowerBoardState>("/power_board/state", 1);
-    topicPub_Voltage = n.advertise<std_msgs::Float64>("/power_board/voltage", 10);
+    topicPub_isEmergencyStop = n.advertise<cob_msgs::EmergencyStopState>("emergency_stop_state", 1);
+    topicPub_Voltage = n.advertise<std_msgs::Float64>("voltage", 1);
 
     // Make sure member variables have a defined state at the beginning
     EM_stop_status_ = ST_EM_FREE;
@@ -170,9 +168,9 @@ int main(int argc, char** argv)
 
 int NodeClass::init()
 {
-  if (n.hasParam("ComPort"))
+  if (n_priv.hasParam("ComPort"))
     {
-      n.getParam("ComPort", sComPort);
+      n_priv.getParam("ComPort", sComPort);
       ROS_INFO("Loaded ComPort parameter from parameter server: %s",sComPort.c_str());
     }
   else
@@ -181,8 +179,8 @@ int NodeClass::init()
       ROS_WARN("ComPort Parameter not available, using default Port: %s",sComPort.c_str());
     }
 
-  n.param("relayboard_timeout", relayboard_timeout_, 2.0);
-  n.param("protocol_version", protocol_version_, 1);
+  n_priv.param("relayboard_timeout", relayboard_timeout_, 2.0);
+  n_priv.param("protocol_version", protocol_version_, 1);
 
   m_SerRelayBoard = new SerRelayBoard(sComPort, protocol_version_);
   ROS_INFO("Opened Relayboard at ComPort = %s", sComPort.c_str());
@@ -244,8 +242,6 @@ void NodeClass::sendEmergencyStopStates()
   bool EM_signal;
   ros::Duration duration_since_EM_confirmed;
   cob_msgs::EmergencyStopState EM_msg;
-  cob_msgs::PowerBoardState pbs;
-  pbs.header.stamp = ros::Time::now();
 
   // assign input (laser, button) specific EM state TODO: Laser and Scanner stop can't be read independently (e.g. if button is stop --> no informtion about scanner, if scanner ist stop --> no informtion about button stop)
   EM_msg.emergency_button_stop = m_SerRelayBoard->isEMStop();
@@ -258,63 +254,49 @@ void NodeClass::sendEmergencyStopStates()
     {
     case ST_EM_FREE:
       {
-	if (EM_signal == true)
-	  {
-	    ROS_INFO("Emergency stop was issued");
-	    EM_stop_status_ = EM_msg.EMSTOP;
-	  }
-	break;
+      if (EM_signal == true)
+        {
+          ROS_INFO("Emergency stop was issued");
+          EM_stop_status_ = EM_msg.EMSTOP;
+        }
+      break;
       }
     case ST_EM_ACTIVE:
       {
-	if (EM_signal == false)
-	  {
-	    ROS_INFO("Emergency stop was confirmed");
-	    EM_stop_status_ = EM_msg.EMCONFIRMED;
-	    time_of_EM_confirmed_ = ros::Time::now();
-	  }
-	break;
+      if (EM_signal == false)
+        {
+          ROS_INFO("Emergency stop was confirmed");
+          EM_stop_status_ = EM_msg.EMCONFIRMED;
+          time_of_EM_confirmed_ = ros::Time::now();
+        }
+      break;
       }
     case ST_EM_CONFIRMED:
       {
-	if (EM_signal == true)
-	  {
-	    ROS_INFO("Emergency stop was issued");
-	    EM_stop_status_ = EM_msg.EMSTOP;
-	  }
-	else
-	  {
-	    duration_since_EM_confirmed = ros::Time::now() - time_of_EM_confirmed_;
-	    if( duration_since_EM_confirmed.toSec() > duration_for_EM_free_.toSec() )
-	      {
-		ROS_INFO("Emergency stop released");
-		EM_stop_status_ = EM_msg.EMFREE;
-	      }
-	  }
-	break;
+      if (EM_signal == true)
+        {
+          ROS_INFO("Emergency stop was issued");
+          EM_stop_status_ = EM_msg.EMSTOP;
+        }
+      else
+        {
+          duration_since_EM_confirmed = ros::Time::now() - time_of_EM_confirmed_;
+          if( duration_since_EM_confirmed.toSec() > duration_for_EM_free_.toSec() )
+            {
+            ROS_INFO("Emergency stop released");
+            EM_stop_status_ = EM_msg.EMFREE;
+            }
+        }
+      break;
       }
     };
 
 
   EM_msg.emergency_state = EM_stop_status_;
 
-  if(EM_msg.emergency_button_stop)
-    pbs.run_stop = false;
-  else
-    pbs.run_stop = true;
-
-  //for cob the wireless stop field is misused as laser stop field
-  if(EM_msg.scanner_stop)
-    pbs.wireless_stop = false;
-  else
-    pbs.wireless_stop = true;
-
-
-
   //publish EM-Stop-Active-messages, when connection to relayboard got cut
   if(relayboard_online == false) {
     EM_msg.emergency_state = EM_msg.EMSTOP;
   }
   topicPub_isEmergencyStop.publish(EM_msg);
-  topicPub_PowerBoardState.publish(pbs);
 }
