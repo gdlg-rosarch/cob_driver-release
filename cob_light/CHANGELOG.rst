@@ -2,6 +2,9 @@
 Changelog for package cob_light
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.7 (2016-04-02)
+------------------
+
 0.6.6 (2016-04-01)
 ------------------
 * keep static mode running so they can be stopped, paused and resumed
