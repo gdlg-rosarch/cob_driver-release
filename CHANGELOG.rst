@@ -2,6 +2,11 @@
 Changelog for package cob_bms_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.7 (2016-04-02)
+------------------
+* add missing dependencies
+* Contributors: ipa-fxm
+
 0.6.6 (2016-04-01)
 ------------------
 * dependency and package cleanup
