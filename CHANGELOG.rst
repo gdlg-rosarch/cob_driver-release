@@ -2,6 +2,9 @@
 Changelog for package cob_generic_can
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.7 (2016-04-02)
+------------------
+
 0.6.6 (2016-04-01)
 ------------------
 * Update accorting to comments from ipa-fxm
