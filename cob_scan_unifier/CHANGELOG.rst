@@ -2,6 +2,9 @@
 Changelog for package cob_scan_unifier
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.7 (2016-04-02)
+------------------
+
 0.6.6 (2016-04-01)
 ------------------
 * changed scan_unifier maintainer
