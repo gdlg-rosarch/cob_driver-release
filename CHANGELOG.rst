@@ -2,6 +2,9 @@
 Changelog for package cob_relayboard
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.6.7 (2016-04-02)
+------------------
+
 0.6.6 (2016-04-01)
 ------------------
 * use aggregated power state message
