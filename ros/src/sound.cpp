@@ -26,6 +26,8 @@ protected:
   ros::Subscriber sub_play_;
   ros::Timer play_feedback_timer_;
   bool mute_;
+  double fade_duration_;
+  bool fade_volume_;
 
   libvlc_instance_t* vlc_inst_;
   libvlc_media_player_t* vlc_player_;
@@ -38,9 +40,10 @@ public:
   ros::Publisher pubMarker_;
 
   SoundAction():
-    as_say_(nh_, "say", boost::bind(&SoundAction::as_cb_say_, this, _1), false),
-    as_play_(nh_, "play", false)
+    as_say_(nh_, ros::this_node::getName() + "/say", boost::bind(&SoundAction::as_cb_say_, this, _1), false),
+    as_play_(nh_, ros::this_node::getName() + "/play", false)
   {
+    nh_ = ros::NodeHandle("~");
     as_play_.registerGoalCallback(boost::bind(&SoundAction::as_goal_cb_play_, this));
     as_play_.registerPreemptCallback(boost::bind(&SoundAction::as_preempt_cb_play_, this));
     srvServer_say_ = nh_.advertiseService("say", &SoundAction::service_cb_say, this);
@@ -54,6 +57,9 @@ public:
     diagnostics_timer_ = nh_.createTimer(ros::Duration(1.0), &SoundAction::timer_cb, this);
     play_feedback_timer_ = nh_.createTimer(ros::Duration(0.25), &SoundAction::timer_play_feedback_cb, this, false, false);
     pubMarker_ = nh_.advertise<visualization_msgs::Marker>("marker",1); //Advertise visualization marker topic
+    fade_volume_ = nh_.param<bool>("fade_volume", true);
+    fade_duration_ =  nh_.param<double>("fade_duration", 0.5);
+
     mute_ = false;
 
     vlc_inst_ = libvlc_new(0,NULL);
@@ -73,56 +79,77 @@ public:
   void as_goal_cb_play_()
   {
     std::string filename = as_play_.acceptNewGoal()->filename;
-    if(play(filename))
+    std::string message;
+    if(play(filename, message))
+    {
       play_feedback_timer_.start();
+    }
     else
-      as_play_.setAborted();
+    {
+      cob_sound::PlayResult result;
+      result.success = false;
+      result.message = message;
+      as_play_.setAborted(result, message);
+    }
   }
 
   void as_preempt_cb_play_()
   {
     if(as_play_.isActive())
     {
+      fade_out();
       play_feedback_timer_.stop();
       libvlc_media_player_stop(vlc_player_);
     }
+    cob_sound::PlayResult result;
+    result.success = false;
+    result.message = "Action has been preempted";
     as_play_.setPreempted();
   }
 
   void as_cb_say_(const cob_sound::SayGoalConstPtr &goal)
   {
-    bool ret = say(goal->text);
+    std::string message;
+    bool ret = say(goal->text, message);
+    
+    cob_sound::SayResult result;
+    result.success = ret;
+    result.message = message;
     if (ret)
     {
-      as_say_.setSucceeded();
+      as_say_.setSucceeded(result, message);
     }
     else
     {
-      as_say_.setAborted();
+      as_say_.setAborted(result, message);
     }
   }
 
   bool service_cb_say(cob_srvs::SetString::Request &req,
-                  cob_srvs::SetString::Response &res )
+                      cob_srvs::SetString::Response &res )
   {
-    res.success = say(req.data);
+    res.success = say(req.data, res.message);
     return true;
   }
 
   bool service_cb_play(cob_srvs::SetString::Request &req,
-                  cob_srvs::SetString::Response &res )
+                       cob_srvs::SetString::Response &res )
   {
-    res.success = play(req.data);
+    res.success = play(req.data, res.message);
     return true;
   }
 
   bool service_cb_stop(std_srvs::Trigger::Request &req,
                        std_srvs::Trigger::Response &res )
   {
+    fade_out();
     if(as_play_.isActive())
     {
       play_feedback_timer_.stop();
-      as_play_.setAborted();
+      cob_sound::PlayResult result;
+      result.success = false;
+      result.message = "Action has been aborted";
+      as_play_.setAborted(result, result.message);
       libvlc_media_player_stop(vlc_player_);
       res.success = true;
       res.message = "aborted running action";
@@ -149,6 +176,7 @@ public:
   {
     mute_ = true;
     res.success = true;
+    res.message = "Sound muted successfully";
     return true;
   }
 
@@ -157,24 +185,28 @@ public:
   {
     mute_ = false;
     res.success = true;
+    res.message = "Sound un-muted successfully";
     return true;
   }
 
   void topic_cb_say(const std_msgs::String::ConstPtr& msg)
   {
-    say(msg->data.c_str());
+    std::string message;
+    say(msg->data.c_str(), message);
   }
 
   void topic_cb_play(const std_msgs::String::ConstPtr& msg)
   {
-    play(msg->data.c_str());
+    std::string message;
+    play(msg->data.c_str(), message);
   }
 
-  bool say(std::string data)
+  bool say(std::string data, std::string& message)
   {
     if (mute_)
     {
-      ROS_WARN("Sound is set to mute. You will hear nothing.");
+      message = "Sound is set to mute. You will hear nothing.";
+      ROS_WARN_STREAM(message);
       return true;
     }
 
@@ -186,9 +218,9 @@ public:
     std::string command;
     std::string cepstral_voice;
     std::string cepstral_conf;
-    nh_.param<std::string>("/sound_controller/mode",mode,"festival");
-    nh_.param<std::string>("/sound_controller/cepstral_voice",cepstral_voice,"David");
-    nh_.param<std::string>("/sound_controller/cepstral_settings",cepstral_conf,"\"speech/rate=170\"");
+    nh_.param<std::string>("mode",mode,"festival");
+    nh_.param<std::string>("cepstral_voice",cepstral_voice,"David");
+    nh_.param<std::string>("cepstral_settings",cepstral_conf,"\"speech/rate=170\"");
     if (mode == "cepstral")
     {
       command = "aoss swift -p " + cepstral_conf + " -n " + cepstral_voice + " " + data;
@@ -199,12 +231,13 @@ public:
     }
     if (system(command.c_str()) != 0)
     {
-      ROS_ERROR("Could not play sound");
+      message = "Command say failed to play sound using mode " + mode;
+      ROS_ERROR_STREAM(message);
       // publishing diagnotic error if output fails
       diagnostic_msgs::DiagnosticStatus status;
       status.level = 2;
       status.name = "sound";
-      status.message = "command say failed to play sound using mode " + mode;
+      status.message = message;
       diagnostics_.status.push_back(status);
 
       diagnostics_.header.stamp = ros::Time::now();
@@ -216,12 +249,13 @@ public:
     return true;
   }
 
-  bool play(std::string filename)
+  bool play(std::string filename, std::string message)
   {
     bool ret = false;
     if (mute_)
     {
-      ROS_WARN("Sound is set to mute. You will hear nothing.");
+      message = "Sound is set to mute. You will hear nothing."; 
+      ROS_WARN_STREAM(message);
       return ret;
     }
 
@@ -232,17 +266,22 @@ public:
     {
         libvlc_media_player_set_media(vlc_player_, vlc_media_);
         libvlc_media_release(vlc_media_);
-        if(libvlc_media_player_play(vlc_player_) >= 0)
+        fade_out();
+        if(fade_in())
+        {
           ret = true;
+          message = "Play successfull";
+        }
     }
     if(ret == false)
     {
-      ROS_ERROR("Could not play file %s", filename.c_str());
+      message = "Could not play file %s" + filename;
+      ROS_ERROR_STREAM(message);
       // publishing diagnotic error if output fails
       diagnostic_msgs::DiagnosticStatus status;
       status.level = 2;
       status.name = "sound";
-      status.message = "command play failed";
+      status.message = message;
       diagnostics_.status.push_back(status);
 
       diagnostics_.header.stamp = ros::Time::now();
@@ -286,6 +325,9 @@ public:
       else
       {
         play_feedback_timer_.stop();
+        cob_sound::PlayResult result;
+        result.success = true;
+        result.message = "Action succeeded";
         as_play_.setSucceeded();
       }
     }
@@ -317,6 +359,49 @@ public:
     marker.color.g = 1.0;
     marker.color.b = 1.0;
     pubMarker_.publish(marker);
+  }
+
+  bool fade_in()
+  {
+    if(libvlc_media_player_play(vlc_player_) >= 0)
+    {
+      if(fade_volume_)
+      {
+        while(libvlc_audio_set_volume(vlc_player_,0) != 0)
+          ros::Duration(0.05).sleep();
+        for(int i = 0; i < 100; i+=5)
+        {
+          libvlc_audio_set_volume(vlc_player_,i);
+          ros::Duration(fade_duration_/20.0).sleep();
+        }
+      }
+      else
+      {
+        while(libvlc_audio_set_volume(vlc_player_,100) != 0)
+          ros::Duration(0.05).sleep();
+
+      }
+    }
+    else
+      return false;
+    return true;
+  }
+
+  bool fade_out()
+  {
+    int volume  = libvlc_audio_get_volume(vlc_player_);
+    if(libvlc_media_player_is_playing(vlc_player_))
+    {
+      if(fade_volume_)
+      {
+        for(int i = volume - (volume%5); i >=0; i-=5)
+        {
+          libvlc_audio_set_volume(vlc_player_,i);
+          ros::Duration(fade_duration_/20.0).sleep();
+        }
+      }
+    }
+    return true;
   }
 
 };
