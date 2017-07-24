@@ -1,0 +1,12 @@
+Source: ros-kinetic-cob-head-axis
+Section: misc
+Priority: extra
+Maintainer: Matthias Gruhler <mig@ipa.fhg.de>
+Build-Depends: debhelper (>= 9.0.0), ros-kinetic-actionlib, ros-kinetic-catkin, ros-kinetic-cob-canopen-motor, ros-kinetic-cob-generic-can, ros-kinetic-cob-srvs, ros-kinetic-cob-utilities, ros-kinetic-control-msgs, ros-kinetic-diagnostic-msgs, ros-kinetic-roscpp, ros-kinetic-sensor-msgs, ros-kinetic-std-srvs, ros-kinetic-urdf
+Homepage: http://ros.org/wiki/cob_head_axis
+Standards-Version: 3.9.2
+
+Package: ros-kinetic-cob-head-axis
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-kinetic-actionlib, ros-kinetic-cob-canopen-motor, ros-kinetic-cob-generic-can, ros-kinetic-cob-srvs, ros-kinetic-cob-utilities, ros-kinetic-control-msgs, ros-kinetic-diagnostic-msgs, ros-kinetic-roscpp, ros-kinetic-rospy, ros-kinetic-sensor-msgs, ros-kinetic-std-srvs, ros-kinetic-urdf
+Description: cob_head_axis
